@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Driver Files">
+      <UniqueIdentifier>{8E41214B-6785-4CFE-B992-037D68949A14}</UniqueIdentifier>
+      <Extensions>inf;inv;inx;mof;mc;</Extensions>
+    </Filter>
+    <Filter Include="入口程序">
+      <UniqueIdentifier>{6885ac17-3f85-44bd-bf4b-9e7f56ccddd2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="内存帮助">
+      <UniqueIdentifier>{eb226c6e-a437-4d20-b4d3-eb702cb7df69}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="对象帮助">
+      <UniqueIdentifier>{f4fa87c6-43e4-400a-9e4a-26a936f6ed1d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="系统帮助">
+      <UniqueIdentifier>{c106afc1-3be0-4ab4-b48d-1a21a523842b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Dll帮助">
+      <UniqueIdentifier>{ab096285-616a-4948-be61-ffbdf3514e96}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="KSandBox.c">
+      <Filter>入口程序</Filter>
+    </ClCompile>
+    <ClCompile Include="ListHelper.c">
+      <Filter>内存帮助</Filter>
+    </ClCompile>
+    <ClCompile Include="LockHelper.c">
+      <Filter>内存帮助</Filter>
+    </ClCompile>
+    <ClCompile Include="PoolHelper.c">
+      <Filter>内存帮助</Filter>
+    </ClCompile>
+    <ClCompile Include="ObjectHelper.c">
+      <Filter>对象帮助</Filter>
+    </ClCompile>
+    <ClCompile Include="SystemHelper.c">
+      <Filter>系统帮助</Filter>
+    </ClCompile>
+    <ClCompile Include="DllHelper.c">
+      <Filter>Dll帮助</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="KSandBox.h">
+      <Filter>入口程序</Filter>
+    </ClInclude>
+    <ClInclude Include="ListHelper.h">
+      <Filter>内存帮助</Filter>
+    </ClInclude>
+    <ClInclude Include="LockHelper.h">
+      <Filter>内存帮助</Filter>
+    </ClInclude>
+    <ClInclude Include="PoolHelper.h">
+      <Filter>内存帮助</Filter>
+    </ClInclude>
+    <ClInclude Include="ObjectHelper.h">
+      <Filter>对象帮助</Filter>
+    </ClInclude>
+    <ClInclude Include="SystemHelper.h">
+      <Filter>系统帮助</Filter>
+    </ClInclude>
+    <ClInclude Include="DllHelper.h">
+      <Filter>Dll帮助</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
