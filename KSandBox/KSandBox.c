@@ -4,6 +4,7 @@ PDRIVER_OBJECT g_DriverObject = NULL;
 
 PPOOL g_MemoryPool = NULL;
 
+//bp KSandBox!DriverEntry
 NTSTATUS DriverEntry(
 	IN  DRIVER_OBJECT* DriverObject,
 	IN  UNICODE_STRING* RegistryPath)
@@ -33,4 +34,10 @@ NTSTATUS DriverEntry(
 		IsOk = SeInitializeDll();
 	}
 
+}
+
+void DriverUnload(DRIVER_OBJECT* DriverObject)
+{
+
+	return;
 }

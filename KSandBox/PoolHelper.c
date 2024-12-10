@@ -1,124 +1,132 @@
 #include "PoolHelper.h"
 
+static __int64 Pool_Alloc_Time = 0;
+static __int64 PoolAllocateMemoryTime = 0;
+static __int64 PoolAllocatePageTime = 0;
+static __int64 Pool_Find_Cells_Time = 0;
+static __int64 Pool_Get_Cells_Time = 0;
+static __int64 Pool_Get_Cells_1_Time = 0;
+static __int64 Pool_Get_Cells_2_Time = 0;
 
+static __int64 Pool_Free_Time = 0;
+static __int64 Pool_Free_Mem_Time = 0;
+static __int64 Pool_Free_Cells_Time = 0;
 
-#if defined(KERNEL_MODE)
-
-#define POOL_PAGE_SIZE          4096            // system page size
-#define POOL_CELL_SIZE          16				//内存池单元格
-#ifdef _WIN64
-#define POOL_MASK_LEFT          0xFFFFFFFFFFFFF000UL
-#else
-#define POOL_MASK_LEFT          0xFFFFF000UL
-#endif
-#define POOL_MASK_RIGHT         0xFFF
-
-
-#else /* ! KERNEL_MODE */
-
-#define POOL_PAGE_SIZE          65536           // VirtualAlloc granularity
-#define POOL_CELL_SIZE          128
-#ifdef _WIN64
-#define POOL_MASK_LEFT          0xFFFFFFFFFFFF0000UL
-#else
-#define POOL_MASK_LEFT          0xFFFF0000UL
-#endif
-#define POOL_MASK_RIGHT         0xFFFF
-#endif
-
-
-#define LARGE_CHUNK_MINIMUM     (POOL_PAGE_SIZE * 3 / 4)
-
-
-
-#define FULL_PAGE_THRESHOLD     4	
-
-
-#ifndef POOL_DEBUG
-#define POOL_DEBUG 0
-#endif
-
-
-#ifndef POOL_TIMING
-#define POOL_TIMING 0
-#endif
-
-
-#define PAD_8(p)        (((p) + 7) & ~7)					//按照8字节向上对齐
-#define PAD_CELL(p)     (((p) + POOL_CELL_SIZE - 1) & ~(POOL_CELL_SIZE - 1))	//按照POOL_CELL_SIZE向上对齐
-#define NUM_CELLS(n)    (PAD_CELL(n) / POOL_CELL_SIZE)		//计算单元格数量
-
-
-
-#define PAGE_HEADER_SIZE    PAD_CELL(sizeof(PAGE))
-
-
-#define PAGE_BITMAP_SIZE    \
-    PAD_CELL(((POOL_PAGE_SIZE - PAGE_HEADER_SIZE) / POOL_CELL_SIZE + 7) / 8)
-
-
-#define NUM_PAGE_CELLS      \
-    ((POOL_PAGE_SIZE - PAGE_HEADER_SIZE - PAGE_BITMAP_SIZE) / POOL_CELL_SIZE)
-
-
-
-#define LARGE_CHUNK_SIZE    PAD_8(sizeof(LARGE_CHUNK))
-
-
-typedef struct PAGE PAGE;
-
-
-#pragma pack(1)
-typedef struct PAGE {
-
-	NODE Node;
-	struct PAGE* Flink;
-	PPOOL  Pool;
-	ULONG  Eyecatcher;
-	USHORT num_free;                    // estimated, not accurate
-}PAGE, * PPAGE;
-
-struct _POOL_
+void SePoolTiming(__int64* Timer)
 {
 
-	ULONG EyeCatcher;
-
-#ifdef POOL_USE_CUSTOM_LOCK
-
-	LOCK pages_lock;
-	LOCK large_chunks_lock;
-
-#elif defined(KERNEL_MODE)
-
-	PERESOURCE Lock;
-
-#else /* ! KERNEL_MODE */
-
-	volatile LONG ThreadIdentify;
-	CRITICAL_SECTION Lock;
-
-#endif
-
-	LIST pages;                         // pages searched during allocation
-	LIST full_pages;                    // full pages that are not searched
-	LIST large_chunks;
-
-	UCHAR InitializeBitmap[PAGE_BITMAP_SIZE];
-};
-
-
-
-
+}
 
 PPOOL SeCreateMemoryPool(void)
 {
 	return SeCreateMemoryPoolTagged(POOL_TAG);
 }
 PPOOL SeCreateMemoryPoolTagged(ULONG Tag)
+//Tag: POOL_TAG 'xoBS'
 {
-	PPOOL v1 = NULL;
+	//创建带有标签的内存池
+	PPOOL Pool = NULL;
+	PPAGE Page;
+	UCHAR* Bitmap;
+	ULONG cellIndex, byteIndex;
+	ULONG Bit;
+
+	//为第一页分配内存
+	Page = SeAllocateMemoryPage(NULL, Tag);
+	if (!Page)
+		return NULL;
+	//设置位图 
+	Bitmap = (UCHAR*)Page + PAGE_HEADER_SIZE;
+	memset(Bitmap, 0, PAGE_BITMAP_SIZE);
+
+	cellIndex = NUMBER_PAGE_CELLS;	//除去内存池头部和位图之外的可用单元数
+	while (1) {
+		byteIndex = cellIndex / 8;	//cellIndex右移三位后的样子
+		Bit = 1 << (cellIndex & 7);
+		if (byteIndex >= PAGE_BITMAP_SIZE)
+			break;
+		if (Bit == 1) {	//如果cellIndex的后3位是0
+			Bitmap[byteIndex] = 0xFF;
+			cellIndex += 8;
+		}
+		else {
+			Bitmap[byteIndex] |= Bit;
+			++cellIndex;
+		}
+	}
+	Pool = (POOL*)((UCHAR*)Page + PAGE_HEADER_SIZE + PAGE_BITMAP_SIZE);
+	Pool->Tag = Tag;
+#ifdef POOL_USE_CUSTOM_LOCK
+
+	Pool->PagesLock = LOCK_FREE;        //锁
+	Pool->LargeChunksLock = LOCK_FREE;  //锁
+
+#elif defined(KERNEL_MODE)
+
+	Pool->Lock = ExAllocatePoolWithTag(
+		NonPagedPool, sizeof(ERESOURCE), Tag);
+	if (!Pool->Lock) {
+		SeFreeMemory(Page, Tag);
+		return NULL;
+	}
+	ExInitializeResourceLite(Pool->Lock);
+
+#else /* ! KERNEL_MODE */
+
+	InterlockedExchange(&Pool->ThreadIdentify, 0);
+	InitializeCriticalSectionAndSpinCount(&Pool->Lock, 1000);
+
+#endif
+	return Pool;
+}
+
+PPAGE SeAllocateMemoryPage(PPOOL Pool, ULONG Tag)
+{
+	//Pool:NULL
+	//Tag: POOL_TAG 'xoBS'
+	PPAGE allocatedPage;
+	SePoolTiming(NULL);
+
+	allocatedPage = (PAGE*)SeAllocateMemory(POOL_PAGE_SIZE, Tag);
+	if (allocatedPage)
+	{
+
+		allocatedPage->Tag = Tag;
+		allocatedPage->Flink = NULL;
+		allocatedPage->num_free = NUMBER_PAGE_CELLS;
+
+		if (Pool)
+		{
+			UCHAR* Bitmap = (UCHAR*)allocatedPage + PAGE_HEADER_SIZE;
+			memcpy(Bitmap, Pool->InitializeBitmap, PAGE_BITMAP_SIZE);
+			allocatedPage->Pool = Pool;
+			SeInsertListBefore(&Pool->pages, NULL, allocatedPage);
+		}
+	}
+
+	SePoolTiming(&PoolAllocatePageTime);
 
 
-	return v1;
+	return allocatedPage;
+}
+
+void* SeAllocateMemory(ULONG NumberOfBytes, ULONG Tag)
+{
+	void* allocatedMemory;
+
+	SePoolTiming(NULL);
+
+
+#ifdef KERNEL_MODE
+	allocatedMemory = ExAllocatePoolWithTag(PagedPool, NumberOfBytes, Tag);
+#else
+	allocatedMemory = VirtualAlloc(0, NumberOfBytes, MEM_RESERVE | MEM_COMMIT | MEM_TOP_DOWN,
+		((UCHAR)Tag == 0xFF ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE));
+#endif
+
+
+	SePoolTiming(&PoolAllocateMemoryTime);
+
+	return allocatedMemory;
 }
 
