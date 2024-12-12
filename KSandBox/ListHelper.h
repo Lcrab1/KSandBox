@@ -31,4 +31,4 @@ typedef struct _LIST_
 #define GET_LIST_FLINK(PList) ((void *)(((NODE*)(PList))->Flink))
 #define GET_LIST_BLINK(PList) ((void *)(((NODE*)(PList))->Blink))
 
-void SeInsertListBefore(PLIST List, void* ParameterData1, void* ParameterData2);
+void SeInsertListBefore(PLIST List, void* nextNode, void* newNode);

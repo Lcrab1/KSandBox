@@ -75,8 +75,26 @@ PPOOL SeCreateMemoryPoolTagged(ULONG Tag)
 
 	InterlockedExchange(&Pool->ThreadIdentify, 0);
 	InitializeCriticalSectionAndSpinCount(&Pool->Lock, 1000);
+	//Lock是一个执行体资源对象
 
 #endif
+	memcpy(Pool->InitializeBitmap, Bitmap, PAGE_BITMAP_SIZE);
+
+	INITIALIZE_LIST(&Pool->pages);
+	SeInsertListBefore(&Pool->pages, NULL, Page);
+
+	INITIALIZE_LIST(&Pool->full_pages);
+	INITIALIZE_LIST(&Pool->large_chunks);
+
+	//标记pool结构体占用的单元
+	//以下这段算法出现了两次，第一次用于初始化位图，标记可用单元；第二次用于标记POOL结构体本身占用的单元
+	cellIndex = 0;
+	while (cellIndex < NUM_CELLS(sizeof(POOL))) {
+		byteIndex = cellIndex / 8;
+		Bit = 1 << (cellIndex & 7);
+		Bitmap[byteIndex] |= Bit;
+		++cellIndex;
+	}
 	return Pool;
 }
 
@@ -130,3 +148,88 @@ void* SeAllocateMemory(ULONG NumberOfBytes, ULONG Tag)
 	return allocatedMemory;
 }
 
+void SeFreeMemory(void* VirtualAddress, ULONG Tag)
+{
+
+#ifdef KERNEL_MODE
+	ExFreePoolWithTag(VirtualAddress, Tag);
+#else
+	if (!VirtualFree(VirtualAddress, 0, MEM_RELEASE)) {
+		RaiseException(
+			STATUS_ACCESS_VIOLATION,
+			EXCEPTION_NONCONTINUABLE_EXCEPTION, 0, NULL);
+		ExitProcess(-1);
+	}
+#endif
+}
+
+#ifdef POOL_USE_CUSTOM_LOCK
+
+
+static const WCHAR* Pool_PagesLock_Name = L"PagesLock";
+static const WCHAR* Pool_LargeChunksLock_Name = L"LargeChunksLock";
+
+
+//#define POOL_LOCK(lock)
+//#define POOL_UNLOCK(lock)
+
+#define POOL_DECLARE_IRQL
+
+
+#if 1
+
+#if defined(KERNEL_MODE)
+#undef  POOL_DECLARE_IRQL
+#define POOL_DECLARE_IRQL KIRQL Irql;                        //Interrupt request Level
+#define POOL_RAISE_IRQL KeRaiseIrql(APC_LEVEL, &Irql);       //
+#define POOL_LOWER_IRQL KeLowerIrql(Irql);                   //
+#else
+#define POOL_RAISE_IRQL
+#define POOL_LOWER_IRQL
+#endif
+
+#define POOL_LOCK(Lock)                                 \
+    POOL_RAISE_IRQL                                     \
+    Lock_Exclusive(&Pool->Lock, Pool_##Lock##_Name);
+
+#define POOL_UNLOCK(Lock)                               \
+    Lock_Unlock(&Pool->Lock, Pool_##Lock##_Name);       \
+    POOL_LOWER_IRQL
+
+#endif
+
+
+#elif defined(KERNEL_MODE)
+
+
+#define POOL_DECLARE_IRQL KIRQL Irql;
+#define POOL_LOCK(dummylockname)                        \
+    KeRaiseIrql(APC_LEVEL, &Irql);                      \
+    ExAcquireResourceExclusiveLite(Pool->Lock, TRUE);
+#define POOL_UNLOCK(dummylockname)                      \
+    ExReleaseResourceLite(Pool->Lock);                  \
+    KeLowerIrql(Irql);
+
+
+#else /* ! KERNEL_MODE */
+
+#define POOL_DECLARE_IRQL                               \
+    const LONG ThreadIdentify = (LONG)GetCurrentThreadId();       \
+    BOOLEAN IsLocked;
+
+#define POOL_LOCK(dummylockname)                        \
+    if (InterlockedCompareExchange(&Pool->ThreadIdentify, ThreadIdentify, 0) != ThreadIdentify) {   \
+        IsLocked = TRUE;                                  \
+        EnterCriticalSection(&Pool->Lock);              \
+        Pool->ThreadIdentify = ThreadIdentify;                            \
+    } else                                              \
+        IsLocked = FALSE;
+
+#define POOL_UNLOCK(dummylockname)                      \
+    if (IsLocked) {                                       \
+        Pool->ThreadIdentify = ThreadIdentify;                            \
+        LeaveCriticalSection(&Pool->Lock);              \
+        InterlockedExchange(&Pool->ThreadIdentify, 0);          \
+    }
+
+#endif

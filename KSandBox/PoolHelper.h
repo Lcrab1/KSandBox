@@ -101,3 +101,4 @@ PPOOL SeCreateMemoryPool(void);
 PPOOL SeCreateMemoryPoolTagged(ULONG Tag);
 PPAGE SeAllocateMemoryPage(PPOOL Pool, ULONG Tag);
 void* SeAllocateMemory(ULONG NumberOfBytes, ULONG Tag);
+void SeFreeMemory(void* VirtualAddress, ULONG Tag);
